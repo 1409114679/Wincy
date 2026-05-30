@@ -1,0 +1,26 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.vs/
+.vscode/
+
+## Build artifacts
+publish/
+*.zip
+*.msi
+*.exe
+!Wincy.exe
+
+## Database
+*.db
+*.db-shm
+*.db-wal
+
+## OS files
+.DS_Store
+Thumbs.db

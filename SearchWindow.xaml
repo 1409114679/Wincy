@@ -1,0 +1,155 @@
+<Window x:Class="Wincy.SearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Wincy"
+        Height="400"
+        Width="400"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="Manual"
+        KeyDown="Window_KeyDown"
+        KeyUp="Window_KeyUp"
+        Deactivated="Window_Deactivated">
+
+    <Border Background="#2D2D2D"
+            BorderBrush="#555555"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="8">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Search Box -->
+            <TextBox x:Name="SearchBox"
+                     Grid.Row="0"
+                     Background="#3D3D3D"
+                     Foreground="White"
+                     CaretBrush="White"
+                     BorderThickness="0"
+                     FontSize="16"
+                     Padding="8,6"
+                     TextChanged="SearchBox_TextChanged"
+                     PreviewKeyDown="SearchBox_PreviewKeyDown">
+                <TextBox.Style>
+                    <Style TargetType="TextBox">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="TextBox">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="4"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ScrollViewer x:Name="PART_ContentHost" />
+                                    </Border>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </TextBox.Style>
+            </TextBox>
+
+            <!-- Results List -->
+            <ListBox x:Name="ResultsList"
+                     Grid.Row="1"
+                     Background="Transparent"
+                     Foreground="White"
+                     BorderThickness="0"
+                     Margin="0,6,0,0"
+                     VirtualizingPanel.ScrollUnit="Item"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     MouseDoubleClick="ResultsList_MouseDoubleClick"
+                     SelectionChanged="ResultsList_SelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Padding="6,4" Background="Transparent">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Pin Indicator -->
+                                <TextBlock Grid.Column="0"
+                                           Text="📌"
+                                           FontSize="10"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,6,0"
+                                           Visibility="{Binding IsPinned, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <!-- Content Preview -->
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Preview}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center"
+                                           FontSize="13" />
+
+                                <!-- Shortcut Hint -->
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding Path=., Converter={StaticResource IndexToShortcutConverter}, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                                           Foreground="#888888"
+                                           FontSize="11"
+                                           VerticalAlignment="Center"
+                                           Margin="8,0,0,0" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Border"
+                                            Background="{TemplateBinding Background}"
+                                            CornerRadius="4"
+                                            Padding="0">
+                                        <ContentPresenter />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Border" Property="Background" Value="#0078D4" />
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Border" Property="Background" Value="#3D3D3D" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+            </ListBox>
+
+            <!-- Footer -->
+            <Border Grid.Row="2" Margin="0,4,0,0" Padding="4,2" Background="#333333" CornerRadius="4">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Foreground="#888888"
+                               FontSize="11"
+                               Text="{Binding ElementName=ResultsList, Path=Items.Count, StringFormat='{} {0} items'}" />
+                    <TextBlock Grid.Column="1"
+                               Foreground="#666666"
+                               FontSize="10">
+                        <Run Text="↵ Copy" />
+                        <Run Text=" | " Foreground="#444444" />
+                        <Run Text="⌥↵ Paste" Foreground="#666666" />
+                    </TextBlock>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
