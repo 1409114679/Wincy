@@ -3,27 +3,27 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Wincy.Models;
+using Wincy.Services;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using RadioButton = System.Windows.Controls.RadioButton;
+using Color = System.Windows.Media.Color;
 
 namespace Wincy;
 
 public partial class SettingsWindow : Window
 {
-    // Current recording state
     private string? _recordingTag;
     private Key _recordedKey;
     private ModifierKeys _recordedModifiers;
     private bool _hasRecordedKey;
     private bool _isCtrlDown, _isAltDown, _isShiftDown, _isWinDown;
-
-    // Hotkey value store (persisted changes)
     private readonly HotkeySettings _settings;
     private readonly HotkeySettings _original;
-
-    // Label -> Tag mapping
     private readonly Dictionary<string, TextBlock> _tagToLabel = new();
+    private bool _suppressLangEvent;
 
     public HotkeySettings CurrentSettings => _settings;
+    public int MaxItems { get; private set; } = 200;
 
     public SettingsWindow(HotkeySettings? current = null)
     {
@@ -31,14 +31,24 @@ public partial class SettingsWindow : Window
         _settings = current?.Clone() ?? HotkeySettings.Defaults;
         _original = current?.Clone() ?? HotkeySettings.Defaults;
 
-        // Map tag → label TextBlocks
         _tagToLabel["ShowHotkey"] = Lbl_ShowHotkey;
         _tagToLabel["CopyHotkey"] = Lbl_CopyHotkey;
         _tagToLabel["PasteHotkey"] = Lbl_PasteHotkey;
         _tagToLabel["DeleteHotkey"] = Lbl_DeleteHotkey;
         _tagToLabel["PinHotkey"] = Lbl_PinHotkey;
 
+        MaxItemsBox.Text = DatabaseService.GetMaxItems().ToString();
+        AutoStartCheck.IsChecked = AutoStartService.IsEnabled;
+
+        _suppressLangEvent = true;
+        if (LocalizationService.CurrentLanguage == Wincy.Services.Language.Chinese)
+            LangCN.IsChecked = true;
+        else
+            LangEN.IsChecked = true;
+        _suppressLangEvent = false;
+
         LoadLabels();
+        ApplyLocalization();
     }
 
     private void LoadLabels()
@@ -50,40 +60,77 @@ public partial class SettingsWindow : Window
         Lbl_PinHotkey.Text = HotkeyToString(_settings.PinHotkey);
     }
 
-    // ===== Click on hotkey label → start recording =====
-    private void HotkeyLabel_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void ApplyLocalization()
     {
-        if (sender is TextBlock tb && tb.Tag is string tag)
-            StartRecording(tag);
+        TitleLabel.Text = Loc("Settings.Title");
+        MaxItemsLabel.Text = CurrentLangStr == "Chinese" ? "最大条目数：" : "Max items: ";
+        ShortcutHeader.Text = Loc("Settings.Shortcuts");
+        Lbl_ShowHideText.Text = Loc("Settings.ShowHide");
+        Lbl_CopyText.Text = Loc("Settings.Copy");
+        Lbl_PasteText.Text = Loc("Settings.Paste");
+        Lbl_DeleteText.Text = Loc("Settings.Delete");
+        Lbl_PinText.Text = Loc("Settings.Pin");
+        AutoStartCheck.Content = Loc("Settings.AutoStart");
+        ResetBtn.Content = Loc("Settings.Reset");
+        DoneBtn.Content = Loc("Settings.Done");
+        HintText.Text = Loc("Settings.Hint");
+        RecordingHint.Text = Loc("Settings.Recording");
+    }
+
+    private static string Loc(string key) => LocalizationService.Get(key);
+    private static string CurrentLangStr => LocalizationService.CurrentLanguage == Wincy.Services.Language.Chinese ? "Chinese" : "English";
+
+    private void Language_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_suppressLangEvent) return;
+        var newLang = (sender as RadioButton)?.Tag is "Chinese" ? Wincy.Services.Language.Chinese : Wincy.Services.Language.English;
+        if (newLang != LocalizationService.CurrentLanguage)
+        {
+            LocalizationService.SetLanguage(newLang);
+            ApplyLocalization();
+            if (_recordingTag != null) UpdateRecordingHint();
+            LocalizationService.NotifyLanguageChanged();
+        }
+    }
+
+    private void AutoStart_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressLangEvent) return;
+        AutoStartService.SetEnabled(AutoStartCheck.IsChecked == true);
+    }
+
+    private void MaxItems_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = !int.TryParse(e.Text, out _);
+    }
+
+    // ===== Hotkey recording =====
+    private void HotkeyLabel_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is TextBlock tb && tb.Tag is string tag) StartRecording(tag);
         e.Handled = true;
     }
 
-    // ===== Click on row background → start recording =====
-    private void HotkeyRow_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void HotkeyRow_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is Grid g && g.Tag is string tag)
-            StartRecording(tag);
+        if (sender is Grid g && g.Tag is string tag) StartRecording(tag);
     }
 
     private void StartRecording(string tag)
     {
-        // Stop any existing recording
         StopRecording();
-
         _recordingTag = tag;
         _hasRecordedKey = false;
         _isCtrlDown = _isAltDown = _isShiftDown = _isWinDown = false;
-
-        // Highlight the recording label
         if (_tagToLabel.TryGetValue(tag, out var label))
         {
             label.Text = "...";
-            label.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xFF, 0xD7, 0x00));
+            label.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00));
             label.FontWeight = FontWeights.Bold;
         }
-
+        RecordingHint.Text = Loc("Settings.Recording");
         RecordingHint.Visibility = Visibility.Visible;
-        Focus(); // ensure window receives key events
+        Focus();
     }
 
     private void StopRecording()
@@ -92,58 +139,32 @@ public partial class SettingsWindow : Window
         _hasRecordedKey = false;
         _isCtrlDown = _isAltDown = _isShiftDown = _isWinDown = false;
         RecordingHint.Visibility = Visibility.Collapsed;
-
-        // Reset all label styles
-        foreach (var kv in _tagToLabel)
-        {
-            kv.Value.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x00, 0x78, 0xD4));
-        }
-
+        foreach (var kv in _tagToLabel) kv.Value.Foreground = new SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4));
         LoadLabels();
     }
 
-    // ===== Keyboard capture =====
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (_recordingTag == null) return;
-
-        // Track modifiers
         switch (e.Key)
         {
             case Key.LeftCtrl: case Key.RightCtrl: _isCtrlDown = true; break;
             case Key.LeftAlt: case Key.RightAlt: _isAltDown = true; break;
             case Key.LeftShift: case Key.RightShift: _isShiftDown = true; break;
             case Key.LWin: case Key.RWin: _isWinDown = true; break;
-            case Key.Escape:
-                StopRecording();
-                e.Handled = true;
-                return;
+            case Key.Escape: StopRecording(); e.Handled = true; return;
         }
-
-        // Ignore modifier-only presses (wait for the real key)
-        if (IsModifierKey(e.Key))
-        {
-            // Show partial combo while holding modifiers
-            UpdateRecordingHint();
-            e.Handled = true;
-            return;
-        }
-
-        // Record the actual key + current modifiers
+        if (IsModifierKey(e.Key)) { UpdateRecordingHint(); e.Handled = true; return; }
         _recordedKey = e.Key;
         _recordedModifiers = GetCurrentModifiers();
         _hasRecordedKey = true;
-
-        // Save to settings
         SaveRecording();
-
         e.Handled = true;
     }
 
     private void Window_PreviewKeyUp(object sender, KeyEventArgs e)
     {
         if (_recordingTag == null) return;
-
         switch (e.Key)
         {
             case Key.LeftCtrl: case Key.RightCtrl: _isCtrlDown = false; break;
@@ -151,16 +172,13 @@ public partial class SettingsWindow : Window
             case Key.LeftShift: case Key.RightShift: _isShiftDown = false; break;
             case Key.LWin: case Key.RWin: _isWinDown = false; break;
         }
-
         UpdateRecordingHint();
     }
 
     private void SaveRecording()
     {
         if (_recordingTag == null || !_hasRecordedKey) return;
-
         var hk = new HotkeyInfo { Key = _recordedKey, Modifiers = _recordedModifiers };
-
         switch (_recordingTag)
         {
             case "ShowHotkey": _settings.ShowHotkey = hk; break;
@@ -169,7 +187,6 @@ public partial class SettingsWindow : Window
             case "DeleteHotkey": _settings.DeleteHotkey = hk; break;
             case "PinHotkey": _settings.PinHotkey = hk; break;
         }
-
         StopRecording();
     }
 
@@ -180,16 +197,19 @@ public partial class SettingsWindow : Window
         if (_isAltDown) parts.Add("Alt");
         if (_isShiftDown) parts.Add("Shift");
         if (_isWinDown) parts.Add("Win");
-        if (parts.Count > 0)
-            RecordingHint.Text = $"⏺ Recording: {string.Join("+", parts)}+? ... (Esc to cancel)";
-        else
-            RecordingHint.Text = "⏺ Recording: Press your key combination... (Esc to cancel)";
+        RecordingHint.Text = parts.Count > 0
+            ? LocalizationService.Get("Settings.RecordingPartial").Replace("{0}", string.Join("+", parts))
+            : Loc("Settings.Recording");
     }
 
-    // ===== Done / Reset =====
     private void Done_Click(object sender, RoutedEventArgs e)
     {
         StopRecording();
+        if (int.TryParse(MaxItemsBox.Text, out int max) && max > 0)
+        {
+            MaxItems = max;
+            DatabaseService.SetMaxItems(max);
+        }
         DialogResult = true;
         Close();
     }
@@ -197,21 +217,19 @@ public partial class SettingsWindow : Window
     private void ResetDefaults_Click(object sender, RoutedEventArgs e)
     {
         StopRecording();
-        var defaults = HotkeySettings.Defaults;
-        _settings.ShowHotkey = defaults.ShowHotkey.Clone();
-        _settings.CopyHotkey = defaults.CopyHotkey.Clone();
-        _settings.PasteHotkey = defaults.PasteHotkey.Clone();
-        _settings.DeleteHotkey = defaults.DeleteHotkey.Clone();
-        _settings.PinHotkey = defaults.PinHotkey.Clone();
+        var d = HotkeySettings.Defaults;
+        _settings.ShowHotkey = d.ShowHotkey.Clone();
+        _settings.CopyHotkey = d.CopyHotkey.Clone();
+        _settings.PasteHotkey = d.PasteHotkey.Clone();
+        _settings.DeleteHotkey = d.DeleteHotkey.Clone();
+        _settings.PinHotkey = d.PinHotkey.Clone();
         LoadLabels();
+        MaxItemsBox.Text = "200";
     }
 
-    // ===== Helpers =====
-    private static bool IsModifierKey(Key key)
-    {
-        return key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+    private static bool IsModifierKey(Key key) =>
+        key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
             or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin;
-    }
 
     private ModifierKeys GetCurrentModifiers()
     {

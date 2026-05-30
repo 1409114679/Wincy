@@ -123,6 +123,7 @@ public partial class App : System.Windows.Application
         if (msg == WM_HOTKEY)
         {
             LogService.Info("HOTKEY!");
+            SearchWindow.CaptureAnchorPoint();
             Dispatcher.Invoke(() => ShowSearchWindow());
             handled = true;
         }
@@ -133,7 +134,6 @@ public partial class App : System.Windows.Application
     private void OpenSettings()
     {
         var settingsWindow = new SettingsWindow(_hotkeySettings);
-        settingsWindow.Owner = _searchWindow;
         var result = settingsWindow.ShowDialog();
 
         if (result == true)
@@ -231,7 +231,11 @@ public partial class App : System.Windows.Application
     private void ShowSearchWindow()
     {
         if (_searchWindow == null) return;
-        try { _searchWindow.RefreshAndShow(); }
+        try
+        {
+            SearchWindow.CaptureAnchorPoint();
+            _searchWindow.RefreshAndShow();
+        }
         catch (Exception ex) { LogService.Error("Show", ex); }
     }
 

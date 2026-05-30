@@ -9,6 +9,7 @@ namespace Wincy.Services;
 /// </summary>
 public class DatabaseService
 {
+    private static int _maxItems = 200;
     private readonly string _connectionString;
 
     public DatabaseService()
@@ -81,7 +82,7 @@ public class DatabaseService
             var checkCmd = connection.CreateCommand();
             checkCmd.CommandText = "SELECT Id, Text FROM ClipboardItems ORDER BY CopiedAt DESC LIMIT 1";
             using var reader = checkCmd.ExecuteReader();
-            if (reader.Read() && reader.GetString(1) == item.Text)
+            if (reader.Read() && !reader.IsDBNull(1) && reader.GetString(1) == item.Text)
             {
                 var existingId = reader.GetInt64(0);
                 reader.Close();
@@ -108,11 +109,11 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@sourceAppPath", (object?)item.SourceAppPath ?? DBNull.Value);
         cmd.ExecuteNonQuery();
 
-        // Keep max 200 items in history
+        // Keep max items in history
         var pruneCmd = connection.CreateCommand();
-        pruneCmd.CommandText = """
+        pruneCmd.CommandText = $"""
             DELETE FROM ClipboardItems WHERE Id NOT IN (
-                SELECT Id FROM ClipboardItems ORDER BY IsPinned DESC, CopiedAt DESC LIMIT 200
+                SELECT Id FROM ClipboardItems ORDER BY IsPinned DESC, CopiedAt DESC LIMIT {_maxItems}
             )
         """;
         pruneCmd.ExecuteNonQuery();
@@ -193,6 +194,40 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@copiedAt", DateTime.Now.ToString("o"));
         cmd.Parameters.AddWithValue("@id", id);
         cmd.ExecuteNonQuery();
+    }
+
+    public static int GetMaxItems() => _maxItems;
+
+    public static void SetMaxItems(int max)
+    {
+        if (max > 0) _maxItems = max;
+        // Persist to config
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Wincy");
+            Directory.CreateDirectory(dir);
+            var configPath = Path.Combine(dir, "config.json");
+            var json = System.Text.Json.JsonSerializer.Serialize(new { MaxItems = _maxItems });
+            System.IO.File.WriteAllText(configPath, json);
+        }
+        catch { }
+    }
+
+    static DatabaseService()
+    {
+        // Load max items from config
+        try
+        {
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Wincy");
+            var configPath = Path.Combine(dir, "config.json");
+            if (System.IO.File.Exists(configPath))
+            {
+                var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(configPath));
+                if (doc.RootElement.TryGetProperty("MaxItems", out var maxProp) && maxProp.TryGetInt32(out int m) && m > 0)
+                    _maxItems = m;
+            }
+        }
+        catch { }
     }
 
     public void ClearAll(bool keepPinned = true)
