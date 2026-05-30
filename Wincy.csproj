@@ -16,4 +16,8 @@
     <PackageReference Include="System.Management" Version="9.0.4" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\Wincy.png" />
+  </ItemGroup>
+
 </Project>

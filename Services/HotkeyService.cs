@@ -13,7 +13,7 @@ public class HotkeyService : IDisposable
     private const int MOD_WIN = 0x0008;
 
     private int _currentHotkeyId = 9000;
-    private readonly Dictionary<int, (System.Windows.Input.ModifierKeys Modifiers, System.Windows.Input.Key Key)> _registeredHotkeys = new();
+    private readonly List<int> _registeredIds = new();
     private IntPtr _hWnd;
     private Action<int>? _hotkeyCallback;
 
@@ -26,7 +26,7 @@ public class HotkeyService : IDisposable
     }
 
     /// <summary>
-    /// Register a global hotkey. Returns the hotkey ID.
+    /// Register a global hotkey. Returns the hotkey ID, or -1 on failure.
     /// </summary>
     public int RegisterHotkey(System.Windows.Input.ModifierKeys modifiers, System.Windows.Input.Key key)
     {
@@ -42,11 +42,17 @@ public class HotkeyService : IDisposable
 
         var result = RegisterHotKey(_hWnd, id, mod, (uint)vk);
         if (result)
-        {
-            _registeredHotkeys[id] = (modifiers, key);
-        }
+            _registeredIds.Add(id);
 
         return result ? id : -1;
+    }
+
+    /// <summary>
+    /// Register from HotkeyInfo (Model). Returns hotkey ID or -1.
+    /// </summary>
+    public int RegisterHotkey(Models.HotkeyInfo info)
+    {
+        return RegisterHotkey(info.Modifiers, info.Key);
     }
 
     /// <summary>
@@ -55,7 +61,7 @@ public class HotkeyService : IDisposable
     public void UnregisterHotkey(int id)
     {
         UnregisterHotKey(_hWnd, id);
-        _registeredHotkeys.Remove(id);
+        _registeredIds.Remove(id);
     }
 
     /// <summary>
@@ -63,11 +69,11 @@ public class HotkeyService : IDisposable
     /// </summary>
     public void UnregisterAll()
     {
-        foreach (var id in _registeredHotkeys.Keys.ToList())
+        foreach (var id in _registeredIds.ToList())
         {
             UnregisterHotKey(_hWnd, id);
         }
-        _registeredHotkeys.Clear();
+        _registeredIds.Clear();
     }
 
     public void HandleWmHotkey(IntPtr wParam)

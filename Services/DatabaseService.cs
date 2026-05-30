@@ -36,12 +36,38 @@ public class DatabaseService
                 ContentType TEXT,
                 IsPinned INTEGER DEFAULT 0,
                 CopiedAt TEXT NOT NULL,
-                SourceApplication TEXT
+                SourceApplication TEXT,
+                SourceAppPath TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_copied_at ON ClipboardItems(CopiedAt DESC);
             CREATE INDEX IF NOT EXISTS idx_pinned ON ClipboardItems(IsPinned);
         """;
         cmd.ExecuteNonQuery();
+
+        // Migrate: add missing columns for older databases
+        MigrateColumns(connection);
+    }
+
+    /// <summary>
+    /// Add any missing columns to support schema upgrades from older versions.
+    /// </summary>
+    private static void MigrateColumns(SqliteConnection connection)
+    {
+        // Get existing column names
+        var columns = new HashSet<string>();
+        var pragmaCmd = connection.CreateCommand();
+        pragmaCmd.CommandText = "PRAGMA table_info('ClipboardItems')";
+        using var reader = pragmaCmd.ExecuteReader();
+        while (reader.Read())
+            columns.Add(reader.GetString(1)); // column name is at index 1
+
+        // Add SourceAppPath if missing
+        if (!columns.Contains("SourceAppPath"))
+        {
+            using var alterCmd = connection.CreateCommand();
+            alterCmd.CommandText = "ALTER TABLE ClipboardItems ADD COLUMN SourceAppPath TEXT";
+            try { alterCmd.ExecuteNonQuery(); } catch { }
+        }
     }
 
     public void AddItem(ClipboardItem item)
@@ -57,27 +83,29 @@ public class DatabaseService
             using var reader = checkCmd.ExecuteReader();
             if (reader.Read() && reader.GetString(1) == item.Text)
             {
-                // Update timestamp of existing entry
+                var existingId = reader.GetInt64(0);
                 reader.Close();
+                // Update timestamp of existing entry
                 var updateCmd = connection.CreateCommand();
                 updateCmd.CommandText = "UPDATE ClipboardItems SET CopiedAt = @copiedAt WHERE Id = @id";
                 updateCmd.Parameters.AddWithValue("@copiedAt", item.CopiedAt.ToString("o"));
-                updateCmd.Parameters.AddWithValue("@id", reader.GetInt64(0) is long id ? id : 0);
-                // Reread and update
+                updateCmd.Parameters.AddWithValue("@id", existingId);
+                updateCmd.ExecuteNonQuery();
                 return;
             }
         }
 
         var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO ClipboardItems (Text, ImageData, ContentType, IsPinned, CopiedAt, SourceApplication)
-            VALUES (@text, @image, @contentType, 0, @copiedAt, @sourceApp)
+            INSERT INTO ClipboardItems (Text, ImageData, ContentType, IsPinned, CopiedAt, SourceApplication, SourceAppPath)
+            VALUES (@text, @image, @contentType, 0, @copiedAt, @sourceApp, @sourceAppPath)
         """;
         cmd.Parameters.AddWithValue("@text", (object?)item.Text ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@image", (object?)item.ImageData ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@contentType", (object?)item.ContentType ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@copiedAt", item.CopiedAt.ToString("o"));
         cmd.Parameters.AddWithValue("@sourceApp", (object?)item.SourceApplication ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@sourceAppPath", (object?)item.SourceAppPath ?? DBNull.Value);
         cmd.ExecuteNonQuery();
 
         // Keep max 200 items in history
@@ -128,7 +156,8 @@ public class DatabaseService
                 ContentType = reader.IsDBNull(3) ? null : reader.GetString(3),
                 IsPinned = reader.GetInt32(4) == 1,
                 CopiedAt = DateTime.Parse(reader.GetString(5)),
-                SourceApplication = reader.IsDBNull(6) ? null : reader.GetString(6)
+                SourceApplication = reader.IsDBNull(6) ? null : reader.GetString(6),
+                SourceAppPath = reader.IsDBNull(7) ? null : reader.GetString(7)
             });
         }
 
@@ -151,6 +180,17 @@ public class DatabaseService
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText = "DELETE FROM ClipboardItems WHERE Id = @id";
+        cmd.Parameters.AddWithValue("@id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    public void TouchItem(long id)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE ClipboardItems SET CopiedAt = @copiedAt WHERE Id = @id";
+        cmd.Parameters.AddWithValue("@copiedAt", DateTime.Now.ToString("o"));
         cmd.Parameters.AddWithValue("@id", id);
         cmd.ExecuteNonQuery();
     }

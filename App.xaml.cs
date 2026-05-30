@@ -1,7 +1,7 @@
-﻿using System.IO;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using Wincy.Models;
 using Wincy.Services;
 
 namespace Wincy;
@@ -11,163 +11,236 @@ public partial class App : System.Windows.Application
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
     private ClipboardService? _clipboardService;
     private DatabaseService? _database;
-    private HotkeyService? _hotkeyService;
     private SearchWindow? _searchWindow;
-    private IntPtr _clipboardViewerHwnd;
-    private IntPtr _nextClipboardViewer;
+    private string? _lastClipboardText;
+    private IntPtr _hotkeyHwnd;
+    private HotkeyService? _hotkeyService;
+    private HotkeySettings _hotkeySettings = HotkeySettings.Defaults.Clone();
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        LogService.Info("=== Wincy v3 ===");
 
-        _database = new DatabaseService();
-        _clipboardService = new ClipboardService(_database);
-        _hotkeyService = new HotkeyService();
+        try
+        {
+            _database = new DatabaseService();
+            _clipboardService = new ClipboardService();
+            _searchWindow = new SearchWindow(_database, _clipboardService, _hotkeySettings, OpenSettings);
 
-        _searchWindow = new SearchWindow(_database, _clipboardService);
+            CreateSystemTray();
+            StartClipboardMonitor();
+            CreateHotkeyWindow();
 
-        CreateSystemTray();
-        SetupClipboardMonitoring();
-        RegisterGlobalHotkey();
+            // Show window on startup
+            ShowSearchWindow();
+            LogService.Info("Started successfully");
+        }
+        catch (Exception ex)
+        {
+            LogService.Error("Startup failed", ex);
+            System.Windows.MessageBox.Show($"Wincy Error: {ex.Message}", "Wincy",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            Shutdown();
+        }
     }
 
-    private void CreateSystemTray()
+    // ===== Hotkey: dedicated invisible window that never closes =====
+    private void CreateHotkeyWindow()
     {
-        var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "icon.ico");
-        var icon = File.Exists(iconPath)
-            ? new Icon(iconPath)
-            : System.Drawing.SystemIcons.Application;
-
-        _notifyIcon = new System.Windows.Forms.NotifyIcon
+        var hotkeyWindow = new Window
         {
-            Icon = icon,
-            Text = "Wincy - Clipboard Manager",
-            Visible = true
-        };
-
-        var contextMenu = new System.Windows.Forms.ContextMenuStrip();
-
-        var showItem = new System.Windows.Forms.ToolStripMenuItem("Show History");
-        showItem.Click += (s, e) => ShowSearchWindow();
-        contextMenu.Items.Add(showItem);
-
-        contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-
-        var clearItem = new System.Windows.Forms.ToolStripMenuItem("Clear History");
-        clearItem.Click += (s, e) => _database?.ClearAll(keepPinned: true);
-        contextMenu.Items.Add(clearItem);
-
-        var clearAllItem = new System.Windows.Forms.ToolStripMenuItem("Clear All (including pinned)");
-        clearAllItem.Click += (s, e) => _database?.ClearAll(keepPinned: false);
-        contextMenu.Items.Add(clearAllItem);
-
-        contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-
-        var exitItem = new System.Windows.Forms.ToolStripMenuItem("Exit");
-        exitItem.Click += (s, e) => ShutdownWincy();
-        contextMenu.Items.Add(exitItem);
-
-        _notifyIcon.ContextMenuStrip = contextMenu;
-        _notifyIcon.DoubleClick += (s, e) => ShowSearchWindow();
-    }
-
-    private void SetupClipboardMonitoring()
-    {
-        var helperWindow = new Window
-        {
-            Width = 0,
-            Height = 0,
+            Width = 0, Height = 0,
             WindowStyle = WindowStyle.None,
-            ShowInTaskbar = false,
-            ShowActivated = false,
+            ShowInTaskbar = false, ShowActivated = false,
             AllowsTransparency = true,
             Background = System.Windows.Media.Brushes.Transparent
         };
 
-        helperWindow.Loaded += (s, e) =>
+        hotkeyWindow.Loaded += (s, e) =>
         {
-            var hwnd = new WindowInteropHelper(helperWindow).Handle;
-            _clipboardViewerHwnd = hwnd;
-            _clipboardService?.StartMonitoring(hwnd);
-            var source = HwndSource.FromHwnd(hwnd);
+            _hotkeyHwnd = new WindowInteropHelper(hotkeyWindow).Handle;
+            var source = HwndSource.FromHwnd(_hotkeyHwnd);
             source?.AddHook(WndProc);
+            RegisterShowHotkey();
+            LogService.Info("Hotkey window ready");
         };
 
-        helperWindow.Show();
+        hotkeyWindow.Show();
+    }
+
+    private void RegisterShowHotkey()
+    {
+        if (_hotkeyService != null)
+        {
+            _hotkeyService.UnregisterAll();
+            _hotkeyService.Dispose();
+        }
+
+        _hotkeyService = new HotkeyService();
+        _hotkeyService.Initialize(_hotkeyHwnd, _ => { });
+
+        var showHk = _hotkeySettings.ShowHotkey;
+
+        // Try configured hotkey first
+        int id = _hotkeyService.RegisterHotkey(showHk);
+        if (id >= 0)
+        {
+            LogService.Info($"Hotkey: {SettingsWindow.HotkeyToString(showHk)}");
+            return;
+        }
+
+        // Fallback: try without Win modifier (Win is most likely to conflict)
+        if (showHk.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Windows))
+        {
+            var fallbackMods = showHk.Modifiers & ~System.Windows.Input.ModifierKeys.Windows;
+            if (fallbackMods != System.Windows.Input.ModifierKeys.None || showHk.Key != System.Windows.Input.Key.None)
+            {
+                id = _hotkeyService.RegisterHotkey(fallbackMods, showHk.Key);
+                if (id >= 0)
+                {
+                    LogService.Info($"Hotkey (fallback): {SettingsWindow.HotkeyToString(new HotkeyInfo { Key = showHk.Key, Modifiers = fallbackMods })}");
+                    return;
+                }
+            }
+        }
+
+        // Last resort: Ctrl+;
+        id = _hotkeyService.RegisterHotkey(
+            System.Windows.Input.ModifierKeys.Control,
+            System.Windows.Input.Key.OemSemicolon);
+        if (id >= 0) { LogService.Info("Hotkey (last resort): Ctrl+;"); return; }
+
+        id = _hotkeyService.RegisterHotkey(
+            System.Windows.Input.ModifierKeys.Alt,
+            System.Windows.Input.Key.OemSemicolon);
+        LogService.Info(id >= 0 ? "Hotkey (last resort): Alt+;" : "ALL HOTKEYS FAILED");
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        const int WM_DRAWCLIPBOARD = 0x0308;
-        const int WM_CHANGECBCHAIN = 0x030D;
         const int WM_HOTKEY = 0x0312;
-
-        switch (msg)
+        if (msg == WM_HOTKEY)
         {
-            case WM_DRAWCLIPBOARD:
-                _clipboardService?.HandleClipboardUpdate();
-                break;
-
-            case WM_CHANGECBCHAIN:
-                if (wParam == _nextClipboardViewer)
-                    _nextClipboardViewer = lParam;
-                else if (_nextClipboardViewer != IntPtr.Zero)
-                    PostMessage(_nextClipboardViewer, WM_CHANGECBCHAIN, wParam, lParam);
-                break;
-
-            case WM_HOTKEY:
-                ShowSearchWindow();
-                break;
+            LogService.Info("HOTKEY!");
+            Dispatcher.Invoke(() => ShowSearchWindow());
+            handled = true;
         }
-
         return IntPtr.Zero;
     }
 
-    private void RegisterGlobalHotkey()
+    // ===== Settings =====
+    private void OpenSettings()
     {
-        if (_hotkeyService != null)
+        var settingsWindow = new SettingsWindow(_hotkeySettings);
+        settingsWindow.Owner = _searchWindow;
+        var result = settingsWindow.ShowDialog();
+
+        if (result == true)
         {
-            _hotkeyService.Initialize(_clipboardViewerHwnd, _ =>
-            {
-                Dispatcher.Invoke(() => ShowSearchWindow());
-            });
-
-            var id = _hotkeyService.RegisterHotkey(
-                System.Windows.Input.ModifierKeys.Control | System.Windows.Input.ModifierKeys.Shift,
-                System.Windows.Input.Key.V
-            );
-
-            if (id < 0)
-            {
-                System.Diagnostics.Debug.WriteLine("Failed to register hotkey Ctrl+Shift+V");
-            }
+            // Apply new settings
+            _hotkeySettings = settingsWindow.CurrentSettings.Clone();
+            _searchWindow?.UpdateHotkeySettings(_hotkeySettings);
+            RegisterShowHotkey(); // re-register global hotkey
+            LogService.Info("Hotkey settings updated");
         }
     }
 
+    // ===== System Tray =====
+    private void CreateSystemTray()
+    {
+        using var iconStream = System.Reflection.Assembly.GetExecutingAssembly()
+            .GetManifestResourceStream("Wincy.Assets.Wincy.png");
+        System.Drawing.Icon? trayIcon = null;
+        if (iconStream != null)
+        {
+            var bmp = System.Drawing.Image.FromStream(iconStream);
+            trayIcon = System.Drawing.Icon.FromHandle(((System.Drawing.Bitmap)bmp).GetHicon());
+        }
+        _notifyIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Icon = trayIcon ?? System.Drawing.SystemIcons.Application,
+            Text = "Wincy - Clipboard Manager", Visible = true
+        };
+        var menu = new System.Windows.Forms.ContextMenuStrip();
+        var show = menu.Items.Add("Show");
+        show.Click += (s, e) => Dispatcher.Invoke(() => ShowSearchWindow());
+        menu.Items.Add("-");
+        var settings = menu.Items.Add("Preferences");
+        settings.Click += (s, e) => Dispatcher.Invoke(() => OpenSettings());
+        menu.Items.Add("-");
+        var clear = menu.Items.Add("Clear History");
+        clear.Click += (s, e) => _database?.ClearAll(true);
+        var clearAll = menu.Items.Add("Clear All");
+        clearAll.Click += (s, e) => _database?.ClearAll(false);
+        menu.Items.Add("-");
+        var exit = menu.Items.Add("Exit");
+        exit.Click += (s, e) => ShutdownWincy();
+        _notifyIcon.ContextMenuStrip = menu;
+        _notifyIcon.DoubleClick += (s, e) => Dispatcher.Invoke(() => ShowSearchWindow());
+    }
+
+    // ===== Clipboard Monitor =====
+    private void StartClipboardMonitor()
+    {
+        var timer = new System.Windows.Forms.Timer { Interval = 500 };
+        timer.Tick += (s, e) =>
+        {
+            try
+            {
+                var (text, imageData, contentType) = _clipboardService!.GetClipboardContent();
+                if (text == null && imageData == null) return;
+                if (text == _lastClipboardText) return;
+                _lastClipboardText = text;
+                var (title, path) = GetActiveWindowInfo();
+                _database?.AddItem(new ClipboardItem
+                {
+                    Text = text, ImageData = imageData, ContentType = contentType,
+                    CopiedAt = DateTime.Now, SourceApplication = title, SourceAppPath = path
+                });
+                _searchWindow?.OnClipboardChanged();
+            }
+            catch (Exception ex) { LogService.Error("Clipboard", ex); }
+        };
+        timer.Start();
+    }
+
+    private static (string? title, string? path) GetActiveWindowInfo()
+    {
+        var hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) return (null, null);
+        var sb = new System.Text.StringBuilder(256);
+        GetWindowText(hwnd, sb, 256);
+        var title = sb.ToString();
+
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        string? path = null;
+        if (pid > 0)
+        {
+            try
+            {
+                using var proc = System.Diagnostics.Process.GetProcessById((int)pid);
+                path = proc.MainModule?.FileName;
+            }
+            catch { }
+        }
+        return (title, path);
+    }
+
+    // ===== Show/Hide =====
     private void ShowSearchWindow()
     {
-        if (_searchWindow != null)
-        {
-            var cursorPos = System.Windows.Forms.Cursor.Position;
-            var screen = System.Windows.Forms.Screen.FromPoint(cursorPos);
-            var workingArea = screen.WorkingArea;
-
-            var left = Math.Min(cursorPos.X, workingArea.Right - _searchWindow.Width);
-            var top = Math.Min(cursorPos.Y + 20, workingArea.Bottom - _searchWindow.Height);
-
-            _searchWindow.Left = Math.Max(left, workingArea.Left);
-            _searchWindow.Top = Math.Max(top, workingArea.Top);
-
-            _searchWindow.RefreshAndShow();
-        }
+        if (_searchWindow == null) return;
+        try { _searchWindow.RefreshAndShow(); }
+        catch (Exception ex) { LogService.Error("Show", ex); }
     }
 
     private void ShutdownWincy()
     {
+        LogService.Info("Shutdown");
         _hotkeyService?.Dispose();
         _clipboardService?.Dispose();
         _notifyIcon?.Dispose();
-        _searchWindow?.Close();
         Current.Shutdown();
     }
 
@@ -179,6 +252,7 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr PostMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder t, int c);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 }
