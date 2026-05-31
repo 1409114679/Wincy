@@ -159,7 +159,7 @@
                      Background="Transparent"
                      Foreground="White"
                      BorderThickness="0"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.VerticalScrollBarVisibility="Hidden"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      MouseDoubleClick="ResultsList_MouseDoubleClick"
                      MouseMove="ResultsList_MouseMove"
