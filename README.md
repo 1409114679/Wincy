@@ -15,13 +15,22 @@ Wincy keeps a history of everything you copy and lets you quickly navigate, sear
 - 💾 **Persistent storage** — SQLite database, history survives reboots
 - 🪶 **Lightweight** — runs in system tray, minimal resource usage
 
-## Download (Portable / 绿色免安装)
+## Download
 
-Download the latest **self-contained portable version** — no .NET runtime required, just download and run:
+### Option 1: Installer (Recommended)
 
-👉 **[Download Wincy.exe](https://github.com/1409114679/Wincy/releases/latest/download/Wincy.exe)**
+👉 **[Download Wincy_Setup.exe](https://github.com/1409114679/Wincy/releases/latest/download/Wincy_Setup.exe)** (5 MB)
 
-- ✅ No installation needed
+- ✅ Standard Windows installer with wizard
+- ✅ Creates Start Menu & Desktop shortcuts
+- ✅ Adds uninstall entry
+- ✅ Requires .NET 8.0 Desktop Runtime *(auto-detected; opens download page if missing)*
+
+### Option 2: Portable (绿色免安装)
+
+👉 **[Download Wincy.exe](https://github.com/1409114679/Wincy/releases/latest/download/Wincy.exe)** (171 MB)
+
+- ✅ No installation needed — just download and run
 - ✅ No .NET runtime required (everything bundled)
 - ✅ Works on Windows 10 / 11 (64-bit)
 

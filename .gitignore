@@ -21,6 +21,19 @@ publish/
 *.db-shm
 *.db-wal
 
+## Inno Setup
+Wincy_Setup.exe
+*.iss
+!Wincy_Setup.iss
+
+## Publish outputs
+publish/
+publish_fd/
+
+## Build scripts
+build_setup.ps1
+check_size.ps1
+
 ## OS files
 .DS_Store
 Thumbs.db

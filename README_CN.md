@@ -15,13 +15,22 @@ Wincy 会记录你复制过的所有内容，让你快速搜索、浏览并复�
 - 💾 **持久化存储** — 基于 SQLite 数据库，重启后历史不丢失
 - 🪶 **轻量低耗** — 运行在系统托盘中，资源占用极低
 
-## 下载（绿色免安装版）
+## 下载
 
-下载最新的**自包含绿色版** — 无需安装 .NET 运行环境，下载后直接运行：
+### 方式一：安装版（推荐）
 
-👉 **[下载 Wincy.exe](https://github.com/1409114679/Wincy/releases/latest/download/Wincy.exe)**
+👉 **[下载 Wincy_Setup.exe](https://github.com/1409114679/Wincy/releases/latest/download/Wincy_Setup.exe)**（5 MB）
 
-- ✅ 无需安装
+- ✅ 标准 Windows 安装向导
+- ✅ 自动创建开始菜单和桌面快捷方式
+- ✅ 附带卸载入口
+- ✅ 需要 .NET 8.0 桌面运行时 *（自动检测；如未安装将引导下载）*
+
+### 方式二：绿色免安装版
+
+👉 **[下载 Wincy.exe](https://github.com/1409114679/Wincy/releases/latest/download/Wincy.exe)**（171 MB）
+
+- ✅ 无需安装，下载即用
 - ✅ 无需额外安装 .NET 运行时（已全部内置）
 - ✅ 支持 Windows 10 / 11（64 位）
 
