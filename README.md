@@ -77,3 +77,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Acknowledgments
 
 Inspired by [Maccy](https://github.com/p0deje/Maccy) — the excellent clipboard manager for macOS.
+
+---
+
+*中文版: [README_CN.md](README_CN.md)*
