@@ -7,7 +7,7 @@ Wincy keeps a history of everything you copy and lets you quickly navigate, sear
 ## Features
 
 - 🔍 **Instant search** — type to filter clipboard history
-- ⌨️ **Keyboard-first** — summon with `Ctrl+Shift+V`, navigate with arrow keys
+- ⌨️ **Keyboard-first** — summon with configurable hotkey, navigate with arrow keys
 - 📌 **Pin items** — keep frequently used snippets on top
 - 🗑️ **Clear history** — delete individual items or clear all
 - 📋 **Copy or Paste** — `Enter` to copy, `Alt+Enter` to paste directly
@@ -15,22 +15,35 @@ Wincy keeps a history of everything you copy and lets you quickly navigate, sear
 - 💾 **Persistent storage** — SQLite database, history survives reboots
 - 🪶 **Lightweight** — runs in system tray, minimal resource usage
 
+## Download (Portable / 绿色免安装)
+
+Download the latest **self-contained portable version** — no .NET runtime required, just download and run:
+
+👉 **[Download Wincy.exe](https://github.com/1409114679/Wincy/releases/latest/download/Wincy.exe)**
+
+- ✅ No installation needed
+- ✅ No .NET runtime required (everything bundled)
+- ✅ Works on Windows 10 / 11 (64-bit)
+
+After downloading, just double-click `Wincy.exe` to start. Wincy will appear in your system tray.
+
+> **Windows SmartScreen note:** On first run, Windows may show a warning. Click "More info" → "Run anyway" to continue.
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+Shift+V` | Show/hide Wincy |
+| Configurable hotkey | Show/hide Wincy |
 | `Enter` | Copy selected item to clipboard |
 | `Alt+Enter` | Paste selected item to foreground app |
 | `Alt+Delete` | Delete selected item |
 | `Alt+P` | Pin/unpin selected item |
-| `Ctrl+1`~`Ctrl+0` | Quick-select items 1-10 |
 | `Esc` | Hide Wincy |
 
 ## System Requirements
 
-- Windows 10 or later
-- .NET 9.0 Runtime
+- Windows 10 or later (64-bit)
+- .NET 8.0 Runtime *(only for building from source; the portable download includes everything)*
 
 ## Build from Source
 
@@ -39,19 +52,22 @@ Wincy keeps a history of everything you copy and lets you quickly navigate, sear
 git clone https://github.com/1409114679/Wincy.git
 cd Wincy
 
-# Build
+# Build (requires .NET 8.0 SDK)
 dotnet build
 
 # Run
 dotnet run
+
+# Publish portable single-file executable
+dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish
 ```
 
 ## Tech Stack
 
-- **C#** / **.NET 9.0**
+- **C#** / **.NET 8.0**
 - **WPF** for the search popup UI
 - **Windows Forms** for system tray integration
-- **SQLite** via `Microsoft.Data.Sqlite` for local storage
+- **SQLite** via `System.Data.SQLite` for local storage
 - **Win32 API** for clipboard monitoring and global hotkeys
 
 ## License
