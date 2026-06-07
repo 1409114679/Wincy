@@ -1,5 +1,6 @@
+using System.Data;
+using System.Data.SQLite;
 using System.IO;
-using Microsoft.Data.Sqlite;
 using Wincy.Models;
 
 namespace Wincy.Services;
@@ -25,7 +26,7 @@ public class DatabaseService
 
     private void InitializeDatabase()
     {
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SQLiteConnection(_connectionString);
         connection.Open();
 
         var cmd = connection.CreateCommand();
@@ -52,7 +53,7 @@ public class DatabaseService
     /// <summary>
     /// Add any missing columns to support schema upgrades from older versions.
     /// </summary>
-    private static void MigrateColumns(SqliteConnection connection)
+    private static void MigrateColumns(SQLiteConnection connection)
     {
         // Get existing column names
         var columns = new HashSet<string>();
@@ -73,7 +74,7 @@ public class DatabaseService
 
     public void AddItem(ClipboardItem item)
     {
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SQLiteConnection(_connectionString);
         connection.Open();
 
         // Deduplicate: if the same text is already the latest item, update its timestamp instead
@@ -122,7 +123,7 @@ public class DatabaseService
     public List<ClipboardItem> GetHistory(string? search = null, int limit = 50)
     {
         var items = new List<ClipboardItem>();
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SQLiteConnection(_connectionString);
         connection.Open();
 
         var cmd = connection.CreateCommand();
@@ -167,7 +168,7 @@ public class DatabaseService
 
     public void TogglePin(long id)
     {
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SQLiteConnection(_connectionString);
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText = "UPDATE ClipboardItems SET IsPinned = CASE WHEN IsPinned = 1 THEN 0 ELSE 1 END WHERE Id = @id";
@@ -177,7 +178,7 @@ public class DatabaseService
 
     public void DeleteItem(long id)
     {
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SQLiteConnection(_connectionString);
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText = "DELETE FROM ClipboardItems WHERE Id = @id";
@@ -187,7 +188,7 @@ public class DatabaseService
 
     public void TouchItem(long id)
     {
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SQLiteConnection(_connectionString);
         connection.Open();
         var cmd = connection.CreateCommand();
         cmd.CommandText = "UPDATE ClipboardItems SET CopiedAt = @copiedAt WHERE Id = @id";
@@ -232,7 +233,7 @@ public class DatabaseService
 
     public void ClearAll(bool keepPinned = true)
     {
-        using var connection = new SqliteConnection(_connectionString);
+        using var connection = new SQLiteConnection(_connectionString);
         connection.Open();
         var cmd = connection.CreateCommand();
         if (keepPinned)

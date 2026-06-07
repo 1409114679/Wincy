@@ -149,13 +149,12 @@ public partial class App : System.Windows.Application
     // ===== System Tray =====
     private void CreateSystemTray()
     {
-        using var iconStream = System.Reflection.Assembly.GetExecutingAssembly()
-            .GetManifestResourceStream("Wincy.Assets.Wincy.png");
         System.Drawing.Icon? trayIcon = null;
-        if (iconStream != null)
+        var icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Wincy.ico");
+        if (System.IO.File.Exists(icoPath))
         {
-            var bmp = System.Drawing.Image.FromStream(iconStream);
-            trayIcon = System.Drawing.Icon.FromHandle(((System.Drawing.Bitmap)bmp).GetHicon());
+            try { trayIcon = new System.Drawing.Icon(icoPath); }
+            catch { }
         }
         _notifyIcon = new System.Windows.Forms.NotifyIcon
         {

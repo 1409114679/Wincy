@@ -68,7 +68,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Image Grid.Column="0" Width="32" Height="32"
-                   Source="{Binding Path=., Converter={StaticResource AppIconConverter}}"
+                   x:Name="AppTitleIcon"
                    Margin="0,0,10,0" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" x:Name="TitleLabel" FontSize="18" FontWeight="Bold"
                        VerticalAlignment="Center" Text="Settings"/>

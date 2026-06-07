@@ -49,6 +49,25 @@ public partial class SettingsWindow : Window
 
         LoadLabels();
         ApplyLocalization();
+        LoadAppIcon();
+    }
+
+    private void LoadAppIcon()
+    {
+        try
+        {
+            var icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Wincy.ico");
+            if (System.IO.File.Exists(icoPath))
+            {
+                var iconBitmap = new System.Windows.Media.Imaging.BitmapImage();
+                iconBitmap.BeginInit();
+                iconBitmap.UriSource = new Uri(icoPath);
+                iconBitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                iconBitmap.EndInit();
+                AppTitleIcon.Source = iconBitmap;
+            }
+        }
+        catch { }
     }
 
     private void LoadLabels()

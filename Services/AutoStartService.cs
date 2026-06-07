@@ -1,3 +1,4 @@
+using System.IO;
 using Microsoft.Win32;
 
 namespace Wincy.Services;
@@ -21,7 +22,9 @@ public static class AutoStartService
         using var key = Registry.CurrentUser.OpenSubKey(RunKey, true);
         if (enabled)
         {
-            var exePath = Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location;
+            // Use the absolute path to Wincy.exe in the app's base directory
+            var appDir = AppDomain.CurrentDomain.BaseDirectory;
+            var exePath = Path.Combine(appDir, "Wincy.exe");
             key?.SetValue(AppName, exePath);
         }
         else

@@ -29,7 +29,7 @@ public class ClipboardItem
                 return null;
 
             var trimmed = Text.Replace('\n', ' ').Replace('\r', ' ');
-            return trimmed.Length > 100 ? trimmed[..100] + "…" : trimmed;
+            return trimmed.Length > 100 ? trimmed.Substring(0, 100) + "…" : trimmed;
         }
     }
 
