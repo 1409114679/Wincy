@@ -166,18 +166,59 @@ public partial class SearchWindow : Window
         if (top < screenTop) top = screenTop + gap;
         Top = top;
 
-        _detailLeft = detLeft;
-        _detailTop = top;
-        _detailListW = listW;
-        _detailRightSide = rightSide;
+        // Calculate detail position based on list window position
+        CalcDetailPosition(listLeft, listW, detW, top);
 
-        LogService.Info($"Position: mouse=({mx:F0},{my:F0}) listLeft={listLeft:F0} top={top:F0} detLeft={detLeft:F0} rightSide={rightSide}");
+        LogService.Info($"Position: mouse=({mx:F0},{my:F0}) listLeft={listLeft:F0} top={top:F0} detLeft={_detailLeft:F0} rightSide={rightSide}");
     }
 
-    private static double _detailLeft, _detailTop, _detailListW;
-    private static bool _detailRightSide;
+    /// <summary>
+    /// Calculate detail window position based on list window position.
+    /// Prefers the same side as list relative to mouse, flips if out of bounds.
+    /// </summary>
+    private void CalcDetailPosition(double listLeft, double listW, double detW, double top)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        double scale = dpi.DpiScaleX;
+
+        // Get screen bounds based on list window position
+        var physPt = new System.Drawing.Point((int)(listLeft * scale + listW * scale / 2), (int)(top * scale));
+        var screen = System.Windows.Forms.Screen.FromPoint(physPt);
+        var rPhys = screen.WorkingArea;
+        double screenLeft = rPhys.Left / scale;
+        double screenRight = rPhys.Right / scale;
+
+        double gap = 6;
+        double listRight = listLeft + listW;
+
+        // Determine preferred side: same as list relative to mouse
+        bool preferRight = _mousePoint.X / scale < listLeft + listW / 2;
+
+        // Try preferred side first, flip if out of bounds
+        double detLeft;
+        if (preferRight)
+        {
+            detLeft = listRight + gap;
+            if (detLeft + detW > screenRight)
+                detLeft = listLeft - detW - gap; // flip to left
+        }
+        else
+        {
+            detLeft = listLeft - detW - gap;
+            if (detLeft < screenLeft)
+                detLeft = listRight + gap; // flip to right
+        }
+
+        // Final clamp to screen bounds
+        detLeft = Math.Max(screenLeft, Math.Min(detLeft, screenRight - detW));
+
+        _detailLeft = detLeft;
+        _detailTop = top;
+    }
+
+    private static double _detailLeft, _detailTop;
     public static (double left, double top, double listW, bool rightSide) GetDetailPosition()
-        => (_detailLeft, _detailTop, _detailListW, _detailRightSide);
+        => (_detailLeft, _detailTop, 0, false);
 
     private void StartDetailTimer(ClipboardItem? item)
     {
@@ -284,7 +325,15 @@ public partial class SearchWindow : Window
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     { if (e.ChangedButton == MouseButton.Left) this.DragMove(); }
     protected override void OnLocationChanged(EventArgs e)
-    { base.OnLocationChanged(e); if (_detailWindow.IsVisible) _detailWindow.Reposition(this); }
+    {
+        base.OnLocationChanged(e);
+
+        // Always recalculate so detail window opens at correct position later
+        CalcDetailPosition(Left, Width, Width, Top);
+
+        if (_detailWindow.IsVisible)
+            _detailWindow.Reposition(this);
+    }
     private void SettingsButton_Click(object sender, RoutedEventArgs e) => _openSettings();
     private void Window_KeyDown(object sender, KeyEventArgs e)
     { switch (e.Key) { case Key.LeftAlt: case Key.RightAlt: _isAltHeld = true; break; case Key.Escape: HideWindow(); break; } }

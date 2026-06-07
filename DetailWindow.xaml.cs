@@ -30,9 +30,9 @@ public partial class DetailWindow : Window
         Owner = owner;
 
         // Get pre-calculated position from SearchWindow
-        var (detLeft, detTop, listW, rightSide) = SearchWindow.GetDetailPosition();
+        var (detLeft, detTop, _, _) = SearchWindow.GetDetailPosition();
 
-        Width = listW; // same width as list window
+        Width = owner.Width; // same width as list window
 
         // Cap height: 50% of screen or fit content
         var dpi = VisualTreeHelper.GetDpi(this);
